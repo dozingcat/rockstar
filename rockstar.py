@@ -36,6 +36,18 @@ class _Null:
     def __fdiv__(self, other):
         return 0
 
+    def __gt__(self, other):
+        return other > 0
+
+    def __ge__(self, other):
+        return other >= 0
+
+    def __lt__(self, other):
+        return other < 0
+
+    def __le__(self, other):
+        return other <= 0
+
     def __str__(self):
         return '[null]'
 
@@ -101,12 +113,14 @@ class StackFrame:
     def call_function(self, fn_name, args):
         if fn_name not in self.fn_table:
             raise RuntimeError(f'Unknown function: ${fn_name}')
-        fn = self.fn_table(fn_name)
+        fn = self.fn_table[fn_name]
         if len(args) != len(fn.parameters):
             raise RuntimeError(f'Expected {len(fn.parameters)} in call to {fn_name} but got {len(args)}')
         child_frame = StackFrame(self.fn_table, self)
+        for param_name, param_value in zip(fn.parameters, args):
+            child_frame.set_var(param_name, param_value)
         try:
-            return fn.block.evaluate()
+            return fn.block.evaluate(child_frame)
         except BlockReturn as ret:
             return ret.value
         except BlockEnd:
@@ -208,7 +222,7 @@ class SubtractFromVarExpression(namedtuple('SubtractFromVarExpression', ['target
 
 class CallFunctionExpression(namedtuple('CallFunctionExpression', ['func_name', 'args'])):
     def evaluate(self, frame: StackFrame):
-        return self.frame.call_function(self.func_name, [arg.evaluate(frame) for arg in self.args])
+        return frame.call_function(self.func_name, [arg.evaluate(frame) for arg in self.args])
 
 
 class WhileExpression(namedtuple('WhileExpression', ['expr', 'block'])):
@@ -295,8 +309,6 @@ ARITHMETIC_KEYWORDS = {
 }
 # Compare operators can be multi-word, e.g. "is not", "is bigger than".
 COMPARE_OPERATORS = {
-    CompareOperator.EQUAL: [['is']],
-    CompareOperator.NOT_EQUAL: [['is', 'not'], ["ain't"]],
     CompareOperator.GT: [
         ['is', 'higher', 'than'],
         ['is', 'greater', 'than'],
@@ -337,6 +349,8 @@ COMPARE_OPERATORS = {
         ['is', 'not', 'bigger', 'than'],
         ['is', 'not', 'stronger', 'than'],
     ],
+    CompareOperator.NOT_EQUAL: [['is', 'not'], ["ain't"]],
+    CompareOperator.EQUAL: [['is']],
 }
 LOGICAL_KEYWORDS = {
     LogicalOperator.AND: ['and'],
@@ -541,7 +555,6 @@ def parse_expression(tokens, context):
         for operator, kw_lists in COMPARE_OPERATORS.items():
             for kw_list in kw_lists:
                 kw_index = _find_sublist(tokens, kw_list)
-                print('Operator check: ', operator, kw_list, kw_index)
                 if kw_index is not None:
                     left_expr = parse_expression(tokens[:kw_index], context)
                     right_expr = parse_expression(tokens[kw_index + len(kw_list):], context)
@@ -580,7 +593,7 @@ def parse_expression(tokens, context):
     # Return
     for kw_list in RETURN_KEYWORDS:
         if ltokens[:len(kw_list)] == kw_list:
-            ret_expr = parse_expression(tokens[:len(kw_list)], context)
+            ret_expr = parse_expression(tokens[len(kw_list):], context)
             return ReturnExpression(ret_expr)
 
     # Function call
@@ -604,8 +617,8 @@ def parse_expression(tokens, context):
     # Output
     for kw_list in WRITE_KEYWORDS:
         if ltokens[:len(kw_list)] == kw_list:
-            var_name = variable_name(tokens[len(kw_list):])
-            return WriteExpression(VariableExpression(var_name))
+            expr = parse_expression(tokens[len(kw_list):], context)
+            return WriteExpression(expr)
 
     # Input
     for kw_list in READ_KEYWORDS:
@@ -648,47 +661,67 @@ def parse_lines(lines, debug=False):
         ending_block = block_stack.pop()
         block_expr = ending_block.create_block_expr()
         if (debug):
-            print('Adding block expression: ', block_expr)
+            print('Adding block expression: ', ending_block.type, block_expr)
         block_stack[-1].subexpressions.append(block_expr)
 
 
     for line_index, line in enumerate(lines):
-        line = line.strip()
-        # FIXME: allow multiline and within a line (but make sure they're not in quotes, etc).
-        if line.startswith('(') and line.endswith(')'):
-            line = ''
-        tokens = tokenize(line, line_index)
-        if len(tokens) == 0:
-            # Block ends
-            if len(block_stack) > 1:
-                end_current_block()
-            continue
-        # Does case matter for these keywords?
-        first = tokens[0].lower()
-        if first == 'if':
-            context.is_condition = True
-            condition = parse_expression(tokens[1:], context)
-            block_stack.append(
-                BlockBuilder(BlockType.IF, lambda block: IfExpression(condition, block)))
-        elif first == 'while':
-            context.is_condition = True
-            condition = parse_expression(tokens[1:], context)
-            block_stack.append(
-                BlockBuilder(BlockType.WHILE, lambda block: WhileExpression(condition, block)))
-        elif first == 'until':
-            # "Until Foo" is equivalent to "While not Foo"
-            context.is_condition = True
-            condition = NegateBinaryExpression(parse_expression(tokens[1:], context))
-            block_stack.append(
-                BlockBuilder(BlockType.UNTIL, lambda block: WhileExpression(condition, block)))
-        # TODO: functions
-        # TODO: else
-        else:
-            context.is_condition = False
-            expr = parse_expression(tokens, context)
-            if debug:
-                print('Adding expression: ', expr)
-            block_stack[-1].subexpressions.append(expr)
+        try:
+            line = line.strip()
+            # FIXME: allow multiline and within a line (but make sure they're not in quotes, etc).
+            if line.startswith('(') and line.endswith(')'):
+                line = ''
+            tokens = tokenize(line, line_index)
+            if len(tokens) == 0:
+                # Block ends
+                if len(block_stack) > 1:
+                    end_current_block()
+                continue
+            # Does case matter for these keywords?
+            first = tokens[0].lower()
+            if first == 'if':
+                context.is_condition = True
+                condition = parse_expression(tokens[1:], context)
+                block_stack.append(BlockBuilder(
+                    BlockType.IF,
+                    lambda block: IfExpression(condition, block, Block([]))))
+            elif first == 'while':
+                context.is_condition = True
+                while_condition = parse_expression(tokens[1:], context)
+                block_stack.append(
+                    BlockBuilder(BlockType.WHILE, lambda block: WhileExpression(while_condition, block)))
+            elif first == 'until':
+                # "Until Foo" is equivalent to "While not Foo"
+                context.is_condition = True
+                until_condition = NegateBinaryExpression(parse_expression(tokens[1:], context))
+                block_stack.append(
+                    BlockBuilder(BlockType.UNTIL, lambda block: WhileExpression(until_condition, block)))
+            elif 'takes' in tokens:
+                tindex = tokens.index('takes')
+                fn_name = variable_name(tokens[:tindex])
+                param_names = []
+                param_name_tokens = []
+                for t in tokens[tindex+1:]:
+                    if t == 'and':
+                        param_names.append(variable_name(param_name_tokens))
+                        param_name_tokens = []
+                    else:
+                        param_name_tokens.append(t)
+                if len(param_name_tokens) > 0:
+                    param_names.append(variable_name(param_name_tokens))
+                block_stack.append(BlockBuilder(
+                    BlockType.FUNCTION,
+                    lambda block: FunctionExpression(fn_name, param_names, block)))
+            # TODO: else
+            else:
+                context.is_condition = False
+                expr = parse_expression(tokens, context)
+                #if debug:
+                #    print('Adding expression: ', expr)
+                block_stack[-1].subexpressions.append(expr)
+        except Exception as ex:
+            print(f'Error at line {line_index+1}')
+            raise
 
     while len(block_stack) > 1:
         end_current_block()
@@ -699,10 +732,13 @@ def execute_lines(lines, debug=False):
     print(lines)
     frame = StackFrame({})
     exprs = parse_lines(lines, debug)
-    print(exprs)
+    if debug:
+        print('Expressions: ', exprs)
+        print('*** Starting execution ***')
     for expr in exprs:
         expr.evaluate(frame)
     if debug:
+        print('*** Execution finished ***')
         print('variables:', frame.vars)
 
 
@@ -710,4 +746,4 @@ if __name__ == '__main__':
     infile = sys.argv[1]
     with open(infile) as f:
         lines = f.readlines()
-    execute_lines(lines, debug=True)
+    execute_lines(lines, debug=False)
