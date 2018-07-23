@@ -305,7 +305,7 @@ ARITHMETIC_KEYWORDS = {
     ArithmeticOperator.ADD: ['plus', 'with'],
     ArithmeticOperator.SUBTRACT: ['minus', 'without'],
     ArithmeticOperator.MULTIPLY: ['times', 'of'],
-    ArithmeticOperator.DIVIDE: ['over'],
+    ArithmeticOperator.DIVIDE: ['over', 'by'],
 }
 # Compare operators can be multi-word, e.g. "is not", "is bigger than".
 COMPARE_OPERATORS = {
@@ -528,6 +528,17 @@ def parse_expression(tokens, context):
         expr = parse_expression(tokens[1:into_index], context)
         return AssignmentExpression(var_name, expr)
 
+    # Logical operators
+    if len(tokens) >= 3:
+        for operator, keywords in LOGICAL_KEYWORDS.items():
+            for kw in keywords:
+                if kw in tokens:
+                    kw_index = tokens.index(kw)
+                    if kw_index > 0 and kw_index < len(tokens) - 1:
+                        left_expr = parse_expression(tokens[:kw_index], context)
+                        right_expr = parse_expression(tokens[kw_index+1:], context)
+                        return LogicalExpression(left_expr, operator, right_expr)
+
     # Poetic assignment: [var_name] [is/was/says...] [value]. Don't do this for
     # the target condition of an if/while statement, because "Foo is 4" is an
     # assignment but "If Foo is 4" is a compare operation.
@@ -559,18 +570,6 @@ def parse_expression(tokens, context):
                     left_expr = parse_expression(tokens[:kw_index], context)
                     right_expr = parse_expression(tokens[kw_index + len(kw_list):], context)
                     return CompareExpression(left_expr, operator, right_expr)
-
-    # Logical operators
-    if len(tokens) >= 3:
-        for operator, keywords in LOGICAL_KEYWORDS.items():
-            for kw in keywords:
-                if kw in tokens:
-                    kw_index = tokens.index(kw)
-                    if kw_index > 0 and kw_index < len(tokens) - 1:
-                        left_expr = parse_expression(tokens[:kw_index], context)
-                        right_expr = parse_expression(tokens[kw_index+1:], context)
-                        return LogicalExpression(left_expr, operator, right_expr)
-
 
     # Arithmetic
     if len(tokens) >= 3:
