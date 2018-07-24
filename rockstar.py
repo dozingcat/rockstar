@@ -1,3 +1,5 @@
+#!/usr/bin/env python3
+
 # Implementation of Rockstar language described at https://github.com/dylanbeattie/rockstar
 # Current as of https://github.com/dylanbeattie/rockstar/commit/864b14b4a40e5fd5cf372880c097c5472a52af1b
 #
@@ -743,6 +745,9 @@ def execute_lines(lines, debug=False, stdin=sys.stdin, stdout=sys.stdout):
 
 
 if __name__ == '__main__':
+    if len(sys.argv) != 2:
+        print(f'Usage: {sys.argv[0]} [file to run]', file=sys.stderr)
+        sys.exit(1)
     infile = sys.argv[1]
     with open(infile) as f:
         lines = f.readlines()
