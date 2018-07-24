@@ -34,6 +34,24 @@ class RockstarTest(unittest.TestCase):
         expected_lines = [str(i) for i in range(27, 0, -1)]
         self.assertEqual(output_lines_for_file('pronoun.rock'), expected_lines)
 
+    def test_primes(self):
+        def primes_up_to(limit):
+            primes = [2, 3]
+            candidate = 5
+            while candidate < limit:
+                prime = True
+                for p in primes:
+                    if candidate % p == 0:
+                        prime = False
+                        break
+                if prime:
+                    primes.append(candidate)
+                candidate += 2
+            return primes
+
+        expected_lines = [str(i) for i in primes_up_to(100)]
+        self.assertEqual(output_lines_for_file('primes.rock'), expected_lines)
+
     def test_tokenize(self):
         t = rs.tokenize
         self.assertEqual(

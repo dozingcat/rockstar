@@ -685,38 +685,47 @@ def parse_lines(lines, debug=False):
             # Does case matter for these keywords?
             first = tokens[0].lower()
             if first == 'if':
-                context.is_condition = True
-                condition = parse_expression(tokens[1:], context)
-                block_stack.append(BlockBuilder(
-                    BlockType.IF,
-                    lambda block: IfExpression(condition, block, Block([]))))
+                # Nested function so `condition` doesn't get reassigned.
+                def doit():
+                    context.is_condition = True
+                    condition = parse_expression(tokens[1:], context)
+                    block_stack.append(BlockBuilder(
+                        BlockType.IF,
+                        lambda block: IfExpression(condition, block, Block([]))))
+                doit()
             elif first == 'while':
-                context.is_condition = True
-                while_condition = parse_expression(tokens[1:], context)
-                block_stack.append(BlockBuilder(
-                    BlockType.WHILE, lambda block: WhileExpression(while_condition, block)))
+                def doit():
+                    context.is_condition = True
+                    while_condition = parse_expression(tokens[1:], context)
+                    block_stack.append(BlockBuilder(
+                        BlockType.WHILE, lambda block: WhileExpression(while_condition, block)))
+                doit()
             elif first == 'until':
                 # "Until Foo" is equivalent to "While not Foo"
-                context.is_condition = True
-                until_condition = NegateBinaryExpression(parse_expression(tokens[1:], context))
-                block_stack.append(BlockBuilder(
-                    BlockType.UNTIL, lambda block: WhileExpression(until_condition, block)))
+                def doit():
+                    context.is_condition = True
+                    until_condition = NegateBinaryExpression(parse_expression(tokens[1:], context))
+                    block_stack.append(BlockBuilder(
+                        BlockType.UNTIL, lambda block: WhileExpression(until_condition, block)))
+                doit()
             elif 'takes' in tokens:
-                tindex = tokens.index('takes')
-                fn_name = variable_name(tokens[:tindex])
-                param_names = []
-                param_name_tokens = []
-                for t in tokens[tindex+1:]:
-                    if t == 'and':
+                def doit():
+                    tindex = tokens.index('takes')
+                    fn_name = variable_name(tokens[:tindex])
+                    param_names = []
+                    param_name_tokens = []
+                    for t in tokens[tindex+1:]:
+                        if t == 'and':
+                            param_names.append(variable_name(param_name_tokens, context))
+                            param_name_tokens = []
+                        else:
+                            param_name_tokens.append(t)
+                    if len(param_name_tokens) > 0:
                         param_names.append(variable_name(param_name_tokens, context))
-                        param_name_tokens = []
-                    else:
-                        param_name_tokens.append(t)
-                if len(param_name_tokens) > 0:
-                    param_names.append(variable_name(param_name_tokens, context))
-                block_stack.append(BlockBuilder(
-                    BlockType.FUNCTION,
-                    lambda block: FunctionExpression(fn_name, param_names, block)))
+                    block_stack.append(BlockBuilder(
+                        BlockType.FUNCTION,
+                        lambda block: FunctionExpression(fn_name, param_names, block)))
+                doit()
             # TODO: else
             else:
                 context.is_condition = False
@@ -728,17 +737,16 @@ def parse_lines(lines, debug=False):
 
     while len(block_stack) > 1:
         end_current_block()
-    return block_stack[0].subexpressions
+    return Block(block_stack[0].subexpressions)
 
 
 def execute_lines(lines, debug=False, stdin=sys.stdin, stdout=sys.stdout):
     frame = StackFrame({}, stdin=stdin, stdout=stdout)
-    exprs = parse_lines(lines, debug)
+    block = parse_lines(lines, debug)
     if debug:
-        print('Expressions: ', exprs)
+        print('Expressions: ', block.expressions)
         print('*** Starting execution ***')
-    for expr in exprs:
-        expr.evaluate(frame)
+    block.evaluate(frame)
     if debug:
         print('*** Execution finished ***')
         print('variables:', frame.vars)

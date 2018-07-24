@@ -1,0 +1,25 @@
+Mod takes Number and Divisor
+While Number is as high as Divisor
+Put Number minus Divisor into Number
+
+Give back Number
+
+
+Say 2
+Say 3
+Limit is 100
+Candidate is 5
+While Candidate is less than Limit
+Factor is 1
+Prime is true
+While Prime and Factor times Factor is not greater than Candidate
+Put Factor plus 2 into Factor
+Put Mod taking Candidate, Factor into Result
+If Result is 0
+Prime is false
+
+
+If Prime is true
+Shout Candidate
+
+Put Candidate plus 2 into Candidate
