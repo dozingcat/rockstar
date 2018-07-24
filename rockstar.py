@@ -284,6 +284,13 @@ class ParseError(Exception):
     pass
 
 
+class ParseContext:
+    def __init__(self, is_condition=False):
+        self.last_var = None
+        self.is_condition = False
+        self.debug = False
+
+
 ASSIGNMENT_KEYWORDS = ['is', 'was', 'were', 'says']
 STRING_ASSIGNMENT_KEYWORDS = 'says'
 COMMON_VARIABLE_PREFIXES = ['a', 'an', 'the', 'my', 'your']
@@ -365,14 +372,25 @@ READ_KEYWORDS = [['listen to']]
 CONDITION_KEYWORDS = ['if', 'while', 'until']
 
 
-def variable_name(tokens):
+def variable_name(tokens, context=None):
+    def record(var_name):
+        if context is not None:
+            context.last_var = var_name
+        return var_name
+
     if not tokens:
         return None
+    if len(tokens) == 1 and tokens[0].lower() in PRONOUNS:
+        print(f'*** Pronoun check: {tokens[0]} {context.last_var}')
+        if context is None or context.last_var is None:
+            if not context.last_var:
+                raise ValueError(f'Pronoun {val} has no antecedent')
+        return context.last_var
     if tokens[0].lower() in COMMON_VARIABLE_PREFIXES:
         if len(tokens) == 2 and tokens[1].isalpha() and tokens[1].islower():
-            return ' '.join(tokens).lower()
+            return record(' '.join(tokens).lower())
     if all(t[0].isupper() for t in tokens):
-        return ' '.join(tokens)
+        return record(' '.join(tokens))
 
 def is_poetic_prefix(tokens):
     if len(tokens) < 2:
@@ -481,13 +499,6 @@ def parse_possibly_poetic(val: str):
         return int(to_digits(val))
 
 
-class ParseContext:
-    def __init__(self, is_condition=False):
-        self.last_var = None
-        self.is_condition = False
-        self.debug = False
-
-
 def _find_sublist(items, sublist):
     lsub = len(sublist)
     for i in range(len(items) - lsub + 1):
@@ -510,10 +521,6 @@ def parse_expression(tokens, context):
         val = tokens[0]
         if val in POETIC_LITERALS:
             return ConstantExpression(POETIC_LITERALS[val])
-        if val in PRONOUNS:
-            if not context.last_var:
-                raise ValueError(f'Pronoun {val} has no antecedent')
-            return VariableExpression(context.last_var)
         if val[0] in QUOTE_CHARS:
             return ConstantExpression(val[1:-1])
         if all(ch in '+-.e' or ch.isdigit() for ch in val):
@@ -524,10 +531,9 @@ def parse_expression(tokens, context):
         into_index = next(i for i in range(len(tokens) - 1, -1, -1) if tokens[i] == 'into')
         if into_index < 2:
             raise ValueError('Missing value between "put" and "into"')
-        var_name = variable_name(tokens[into_index+1:])
+        var_name = variable_name(tokens[into_index+1:], context)
         if not var_name:
             raise ValueError('Variable name not found after "into"')
-        context.last_var = var_name
         expr = parse_expression(tokens[1:into_index], context)
         return AssignmentExpression(var_name, expr)
 
@@ -546,9 +552,8 @@ def parse_expression(tokens, context):
     # the target condition of an if/while statement, because "Foo is 4" is an
     # assignment but "If Foo is 4" is a compare operation.
     if not context.is_condition and len(tokens) >= 3 and tokens[-2].lower() in ASSIGNMENT_KEYWORDS:
-        var_name = variable_name(tokens[:-2])
+        var_name = variable_name(tokens[:-2], context)
         if var_name:
-            context.last_var = var_name
             # 'Alice says ZZZ' is always a string assignment
             if tokens[-2] in STRING_ASSIGNMENT_KEYWORDS:
                 return AssignmentExpression(var_name, ConstantExpression(tokens[-1]))
@@ -559,9 +564,8 @@ def parse_expression(tokens, context):
     if len(tokens) >= 3:
         for amount, keywords in INCREMENT_KEYWORDS.items():
             if tokens[0].lower() == keywords[0] and tokens[-1].lower() == keywords[1]:
-                var_name = variable_name(tokens[1:-1])
+                var_name = variable_name(tokens[1:-1], context)
                 if var_name:
-                    context.last_var = var_name
                     return AddToVarExpression(var_name, ConstantExpression(amount))
 
     # Compare operators
@@ -603,7 +607,7 @@ def parse_expression(tokens, context):
         if kw in tokens:
             kw_index = tokens.index(kw)
             if kw_index > 0:
-                fn_name = variable_name(tokens[:kw_index])
+                fn_name = variable_name(tokens[:kw_index], context)
                 arg_exprs = []
                 current_arg_tokens = []
                 for t in tokens[kw_index+1:]:
@@ -625,13 +629,12 @@ def parse_expression(tokens, context):
     # Input
     for kw_list in READ_KEYWORDS:
         if ltokens[:len(kw_list)] == kw_list:
-            var_name = variable_name(tokens[len(kw_list):])
+            var_name = variable_name(tokens[len(kw_list):], context)
             return ReadExpression(var_name)
 
     # Variable name
-    var_name = variable_name(tokens)
+    var_name = variable_name(tokens, context)
     if var_name:
-        context.last_var = var_name
         return VariableExpression(var_name)
 
     raise ParseError('Failed to parse tokens: ', tokens)
@@ -705,12 +708,12 @@ def parse_lines(lines, debug=False):
                 param_name_tokens = []
                 for t in tokens[tindex+1:]:
                     if t == 'and':
-                        param_names.append(variable_name(param_name_tokens))
+                        param_names.append(variable_name(param_name_tokens, context))
                         param_name_tokens = []
                     else:
                         param_name_tokens.append(t)
                 if len(param_name_tokens) > 0:
-                    param_names.append(variable_name(param_name_tokens))
+                    param_names.append(variable_name(param_name_tokens, context))
                 block_stack.append(BlockBuilder(
                     BlockType.FUNCTION,
                     lambda block: FunctionExpression(fn_name, param_names, block)))
