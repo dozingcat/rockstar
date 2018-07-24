@@ -362,6 +362,7 @@ RETURN_KEYWORDS = [['give', 'back']]
 FUNCTION_CALL_KEYWORDS = ['taking']
 WRITE_KEYWORDS = [['say'], ['shout'], ['whisper'], ['scream']]
 READ_KEYWORDS = [['listen to']]
+CONDITION_KEYWORDS = ['if', 'while', 'until']
 
 
 def variable_name(tokens):
@@ -377,6 +378,8 @@ def is_poetic_prefix(tokens):
     if len(tokens) < 2:
         return False
     if tokens[-1].lower() not in ASSIGNMENT_KEYWORDS:
+        return False
+    if tokens[0].lower() in CONDITION_KEYWORDS:
         return False
     return variable_name(tokens[:-1]) is not None
 
