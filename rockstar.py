@@ -1,10 +1,16 @@
-# https://github.com/dylanbeattie/rockstar
+# Implementation of Rockstar language described at https://github.com/dylanbeattie/rockstar
+# Current as of https://github.com/dylanbeattie/rockstar/commit/864b14b4a40e5fd5cf372880c097c5472a52af1b
+#
+# (c) 2018 Brian Nenninger
+# Released under the MIT license.
 
 from collections import namedtuple
 from enum import Enum
 import sys
 
 
+# This is the value of the nothing/nowhere/nobody keyword.
+# It acts like 0 and the empty string.
 class _Null:
     def __eq__(self, other):
         return self is other or other == 0 or other == False or other == None
@@ -88,15 +94,13 @@ class BlockContinue(Exception):
     pass
 
 
-class BlockEnd(Exception):
-    pass
-
-
 class StackFrame:
-    def __init__(self, fn_table, parent = None):
+    def __init__(self, fn_table, parent=None, stdin=sys.stdin, stdout=sys.stdout):
         self.parent = parent
         self.fn_table = fn_table
         self.vars = {}
+        self.stdin = stdin
+        self.stdout = stdout
 
     def get_var(self, var_name):
         if var_name not in self.vars:
@@ -115,16 +119,15 @@ class StackFrame:
             raise RuntimeError(f'Unknown function: ${fn_name}')
         fn = self.fn_table[fn_name]
         if len(args) != len(fn.parameters):
-            raise RuntimeError(f'Expected {len(fn.parameters)} in call to {fn_name} but got {len(args)}')
-        child_frame = StackFrame(self.fn_table, self)
+            raise RuntimeError(
+                f'Expected {len(fn.parameters)} in call to {fn_name} but got {len(args)}')
+        child_frame = StackFrame(self.fn_table, self, self.stdin, self.stdout)
         for param_name, param_value in zip(fn.parameters, args):
             child_frame.set_var(param_name, param_value)
         try:
             return fn.block.evaluate(child_frame)
         except BlockReturn as ret:
             return ret.value
-        except BlockEnd:
-            return NULL
         except BlockBreak:
             raise RuntimeError('break called from top level of function')
         except BlockContinue:
@@ -173,7 +176,8 @@ class CompareExpression(namedtuple('CompareExpression', ['left_expr', 'operator'
         raise AssertionError(f'Unknown operator: {self.operator}')
 
 
-class ArithmeticExpression(namedtuple('ArithmeticExpression', ['left_expr', 'operator', 'right_expr'])):
+class ArithmeticExpression(namedtuple('ArithmeticExpression',
+                                      ['left_expr', 'operator', 'right_expr'])):
     def evaluate(self, frame: StackFrame):
         lhs = self.left_expr.evaluate(frame)
         rhs = self.right_expr.evaluate(frame)
@@ -257,21 +261,16 @@ class ContinueExpression:
         raise BlockContinue
 
 
-class BlockEndExpression:
-    def evaluate(self, frame: StackFrame):
-        raise BlockEnd
-
-
 class WriteExpression(namedtuple('WriteExpression', ['expr'])):
     def evaluate(self, frame: StackFrame):
         val = self.expr.evaluate(frame)
-        print(val)
+        print(val, file=frame.stdout)
         return val
 
 
 class ReadExpression(namedtuple('ReadExpression', ['var_name'])):
     def evaluate(self, frame: StackFrame):
-        line = sys.stdin.readline()
+        line = frame.stdin.readline()
         frame.set_var(self.var_name, line)
         return line
 
@@ -381,7 +380,6 @@ def variable_name(tokens, context=None):
     if not tokens:
         return None
     if len(tokens) == 1 and tokens[0].lower() in PRONOUNS:
-        print(f'*** Pronoun check: {tokens[0]} {context.last_var}')
         if context is None or context.last_var is None:
             if not context.last_var:
                 raise ValueError(f'Pronoun {val} has no antecedent')
@@ -673,7 +671,7 @@ def parse_lines(lines, debug=False):
     for line_index, line in enumerate(lines):
         try:
             line = line.strip()
-            # FIXME: allow multiline and within a line (but make sure they're not in quotes, etc).
+            # TODO: allow multiline and within a line (but make sure they're not in quotes, etc).
             if line.startswith('(') and line.endswith(')'):
                 line = ''
             tokens = tokenize(line, line_index)
@@ -693,14 +691,14 @@ def parse_lines(lines, debug=False):
             elif first == 'while':
                 context.is_condition = True
                 while_condition = parse_expression(tokens[1:], context)
-                block_stack.append(
-                    BlockBuilder(BlockType.WHILE, lambda block: WhileExpression(while_condition, block)))
+                block_stack.append(BlockBuilder(
+                    BlockType.WHILE, lambda block: WhileExpression(while_condition, block)))
             elif first == 'until':
                 # "Until Foo" is equivalent to "While not Foo"
                 context.is_condition = True
                 until_condition = NegateBinaryExpression(parse_expression(tokens[1:], context))
-                block_stack.append(
-                    BlockBuilder(BlockType.UNTIL, lambda block: WhileExpression(until_condition, block)))
+                block_stack.append(BlockBuilder(
+                    BlockType.UNTIL, lambda block: WhileExpression(until_condition, block)))
             elif 'takes' in tokens:
                 tindex = tokens.index('takes')
                 fn_name = variable_name(tokens[:tindex])
@@ -721,8 +719,6 @@ def parse_lines(lines, debug=False):
             else:
                 context.is_condition = False
                 expr = parse_expression(tokens, context)
-                #if debug:
-                #    print('Adding expression: ', expr)
                 block_stack[-1].subexpressions.append(expr)
         except Exception as ex:
             print(f'Error at line {line_index+1}')
@@ -733,9 +729,8 @@ def parse_lines(lines, debug=False):
     return block_stack[0].subexpressions
 
 
-def execute_lines(lines, debug=False):
-    print(lines)
-    frame = StackFrame({})
+def execute_lines(lines, debug=False, stdin=sys.stdin, stdout=sys.stdout):
+    frame = StackFrame({}, stdin=stdin, stdout=stdout)
     exprs = parse_lines(lines, debug)
     if debug:
         print('Expressions: ', exprs)

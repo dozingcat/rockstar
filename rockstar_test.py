@@ -1,8 +1,39 @@
+import io
 import unittest
+import subprocess
 
 import rockstar as rs
 
+
+def output_lines_for_file(filename):
+    buffer = io.StringIO()
+    with open(filename) as f:
+        lines = f.readlines()
+    rs.execute_lines(lines, stdout=buffer)
+    buffer.seek(0)
+    return [line.strip() for line in buffer.readlines()]
+
+
 class RockstarTest(unittest.TestCase):
+
+    def test_fizzbuzz(self):
+        def fizzbuzz(n):
+            if n % 15 == 0:
+                return 'FizzBuzz!'
+            if n % 3 == 0:
+                return 'Fizz!'
+            if n % 5 == 0:
+                return 'Buzz!'
+            return str(n)
+
+        expected_lines = [fizzbuzz(i) for i in range(1, 101)]
+        self.assertEqual(output_lines_for_file('fizzbuzz_boring.rock'), expected_lines)
+        self.assertEqual(output_lines_for_file('fizzbuzz_poetic.rock'), expected_lines)
+
+    def test_pronoun(self):
+        expected_lines = [str(i) for i in range(27, 0, -1)]
+        self.assertEqual(output_lines_for_file('pronoun.rock'), expected_lines)
+
     def test_tokenize(self):
         t = rs.tokenize
         self.assertEqual(
@@ -20,6 +51,10 @@ class RockstarTest(unittest.TestCase):
         self.assertEqual(
             t('My cat is round and fluffy'),
             ['My', 'cat', 'is', 'round and fluffy'])
+        # Not a poetic assignment because of the 'while' keyword.
+        self.assertEqual(
+            t('While Alice is stronger than Bob'),
+            ['While', 'Alice', 'is', 'stronger', 'than', 'Bob'])
         self.assertEqual(
             t('James Earl Jones was Darth Vader'),
             ['James', 'Earl', 'Jones', 'was', 'Darth Vader'])
