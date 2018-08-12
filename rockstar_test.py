@@ -62,10 +62,13 @@ class RockstarTest(unittest.TestCase):
             ['tau', 'is', '6.28'])
         self.assertEqual(
             t("Tommy ain't nobody"),
-            ['Tommy', "ain't", 'nobody'])
+            ['Tommy', "aint", 'nobody'])
         self.assertEqual(
             t('Alice stated "Bob said \'yes\'" and laughed'),
-            ['Alice', 'stated', '"Bob said \'yes\'"', 'and', 'laughed'])
+            ['Alice', 'stated', '"Bob said yes"', 'and', 'laughed'])
+        self.assertEqual(
+            t("Carol is lookin' for a job"),
+            ['Carol', 'is', "lookin' for a job"])
         self.assertEqual(
             t('My cat is round and fluffy'),
             ['My', 'cat', 'is', 'round and fluffy'])

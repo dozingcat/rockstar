@@ -313,7 +313,7 @@ ARITHMETIC_KEYWORDS = {
     ArithmeticOperator.ADD: ['plus', 'with'],
     ArithmeticOperator.SUBTRACT: ['minus', 'without'],
     ArithmeticOperator.MULTIPLY: ['times', 'of'],
-    ArithmeticOperator.DIVIDE: ['over', 'by'],
+    ArithmeticOperator.DIVIDE: ['over'],
 }
 # Compare operators can be multi-word, e.g. "is not", "is bigger than".
 COMPARE_OPERATORS = {
@@ -410,6 +410,12 @@ def tokenize(line: str, line_index=0):
         IN_QUOTE = 4
         AFTER_POETIC_ASSIGNMENT = 5
 
+    def tokens_for_string(s):
+        if s.endswith("'s"):
+            return [s[:-2].replace("'", ''), 'is']
+        else:
+            return [s.replace("'", '')]
+
     tokens = []
     token_start = -1
     quote_char = ''
@@ -434,7 +440,7 @@ def tokenize(line: str, line_index=0):
                 raise TokenError(f'Unexpected character {ch} at line {line_index+1}:{index+1}')
         elif state == State.IN_WORD:
             if ch.isspace():
-                tokens.append(line[token_start:index])
+                tokens.extend(tokens_for_string(line[token_start:index]))
                 if is_poetic_prefix(tokens):
                     poetic_val = line[index+1:].strip()
                     if not poetic_val:
@@ -445,19 +451,19 @@ def tokenize(line: str, line_index=0):
                 else:
                     state = State.BETWEEN_TOKENS
             elif ch in SEPARATOR_CHARS:
-                tokens.append(line[token_start:index])
+                tokens.extend(tokens_for_string(line[token_start:index]))
                 tokens.append(ch)
                 state = State.BETWEEN_TOKENS
             else:
                 pass
         elif state == State.IN_NUMBER:
             if ch.isspace():
-                tokens.append(line[token_start:index])
+                tokens.extend(tokens_for_string(line[token_start:index]))
                 state = State.BETWEEN_TOKENS
             elif ch.isdigit() or ch in ('.', 'e', '+', '-'):
                 pass
             elif ch in SEPARATOR_CHARS:
-                tokens.append(line[token_start:index])
+                tokens.extend(tokens_for_string(line[token_start:index]))
                 tokens.append(ch)
                 state = State.BETWEEN_TOKENS
             else:
@@ -467,7 +473,7 @@ def tokenize(line: str, line_index=0):
             # Do we need escapes?
             if ch == quote_char:
                 # Include the quotes in the token so we can distinguish "123" from 123.
-                tokens.append(line[token_start:index+1])
+                tokens.extend(tokens_for_string(line[token_start:index+1]))
                 state = State.BETWEEN_TOKENS
             else:
                 pass
