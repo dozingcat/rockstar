@@ -45,16 +45,16 @@ class _Null:
         return 0
 
     def __gt__(self, other):
-        return other > 0
+        return 0 >= other
 
     def __ge__(self, other):
-        return other >= 0
+        return 0 >= other
 
     def __lt__(self, other):
-        return other < 0
+        return 0 < other
 
     def __le__(self, other):
-        return other <= 0
+        return 0 <= other
 
     def __str__(self):
         return '[null]'
@@ -184,6 +184,9 @@ class ArithmeticExpression(namedtuple('ArithmeticExpression',
         lhs = self.left_expr.evaluate(frame)
         rhs = self.right_expr.evaluate(frame)
         if self.operator == ArithmeticOperator.ADD:
+            # Coerce to strings if either argument is a string.
+            if isinstance(lhs, str) or isinstance(rhs, str):
+                return str(lhs) + str(rhs)
             return lhs + rhs
         if self.operator == ArithmeticOperator.SUBTRACT:
             return lhs - rhs
@@ -357,7 +360,7 @@ COMPARE_OPERATORS = {
         ['is', 'not', 'bigger', 'than'],
         ['is', 'not', 'stronger', 'than'],
     ],
-    CompareOperator.NOT_EQUAL: [['is', 'not'], ["ain't"]],
+    CompareOperator.NOT_EQUAL: [['is', 'not'], ["aint"]],
     CompareOperator.EQUAL: [['is']],
 }
 LOGICAL_KEYWORDS = {
@@ -522,6 +525,7 @@ def parse_expression(tokens, context):
     # Strip trailing commas.
     while len(tokens) > 0 and tokens[-1] in SEPARATOR_CHARS:
         tokens.pop()
+    ltokens = [t.lower() for t in tokens]
     # Literal value or pronoun.
     if len(tokens) == 1:
         val = tokens[0]
@@ -531,6 +535,18 @@ def parse_expression(tokens, context):
             return ConstantExpression(val[1:-1])
         if all(ch in '+-.e' or ch.isdigit() for ch in val):
             return ConstantExpression(float(val) if '.' in val else int(val))
+
+    # Output
+    for kw_list in WRITE_KEYWORDS:
+        if ltokens[:len(kw_list)] == kw_list:
+            expr = parse_expression(tokens[len(kw_list):], context)
+            return WriteExpression(expr)
+
+    # Input
+    for kw_list in READ_KEYWORDS:
+        if ltokens[:len(kw_list)] == kw_list:
+            var_name = variable_name(tokens[len(kw_list):], context)
+            return ReadExpression(var_name)
 
     # Assignment: put [expr] into [var_name]
     if len(tokens) >= 4 and tokens[0].lower() == 'put' and 'into' in tokens:
@@ -596,7 +612,6 @@ def parse_expression(tokens, context):
                         return ArithmeticExpression(left_expr, operator, right_expr)
 
     # Break/continue
-    ltokens = [t.lower() for t in tokens]
     if any(kw_list == ltokens for kw_list in BREAK_KEYWORDS):
         return BreakExpression()
     if any(kw_list == ltokens for kw_list in CONTINUE_KEYWORDS):
@@ -625,18 +640,6 @@ def parse_expression(tokens, context):
                 if len(current_arg_tokens) > 0:
                     arg_exprs.append(parse_expression(current_arg_tokens, context))
                 return CallFunctionExpression(fn_name, arg_exprs)
-
-    # Output
-    for kw_list in WRITE_KEYWORDS:
-        if ltokens[:len(kw_list)] == kw_list:
-            expr = parse_expression(tokens[len(kw_list):], context)
-            return WriteExpression(expr)
-
-    # Input
-    for kw_list in READ_KEYWORDS:
-        if ltokens[:len(kw_list)] == kw_list:
-            var_name = variable_name(tokens[len(kw_list):], context)
-            return ReadExpression(var_name)
 
     # Variable name
     var_name = variable_name(tokens, context)

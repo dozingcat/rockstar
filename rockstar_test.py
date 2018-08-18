@@ -1,7 +1,5 @@
 import io
 import unittest
-import subprocess
-
 import rockstar as rs
 
 
@@ -31,7 +29,7 @@ class RockstarTest(unittest.TestCase):
         self.assertEqual(output_lines_for_file('fizzbuzz_poetic.rock'), expected_lines)
 
     def test_pronoun(self):
-        expected_lines = [str(i) for i in range(27, 0, -1)]
+        expected_lines = [str(i) for i in list(range(27, 0, -1)) + list(range(1, 11))]
         self.assertEqual(output_lines_for_file('pronoun.rock'), expected_lines)
 
     def test_primes(self):
@@ -51,6 +49,12 @@ class RockstarTest(unittest.TestCase):
 
         expected_lines = [str(i) for i in primes_up_to(100)]
         self.assertEqual(output_lines_for_file('primes.rock'), expected_lines)
+
+    def test_mandelbrot(self):
+        import mandelbrot
+        expected_lines = list(
+            mandelbrot.compute_lines(xmin=-2.0, xmax=1.0, ymin=-1.25, ymax=1.25, rows=32, cols=79))
+        self.assertEqual(output_lines_for_file('mandelbrot.rock'), expected_lines)
 
     def test_tokenize(self):
         t = rs.tokenize
