@@ -1,0 +1,52 @@
+Escape takes Real and Imag
+Put Real into RealStart
+Put Imag into ImagStart
+Put 0 into Iters
+While Iters is less than 100
+Put Real times Real into RealSquared
+Put Imag times Imag into ImagSquared
+Put RealSquared minus ImagSquared into RealProd
+Put RealProd plus RealStart into RealNext
+Put 2 times Real times Imag into ImagProd
+Put ImagProd plus ImagStart into Imag
+Put RealNext into Real
+Put Real times Real into RealSquared
+Put Imag times Imag into ImagSquared
+Put RealSquared plus ImagSquared into Mag
+If Mag is greater than 4
+Give back Iters
+
+Build Iters up
+
+Give back Iters
+
+
+Put 0 minus 2.0 into MinX
+Put 1.0 into MaxX
+Put 0 minus 1.25 into MinY
+Put 1.25 into MaxY
+Put 32 into Rows
+Put 79 into Columns
+Put MaxX minus MinX into XRange
+Put MaxY minus MinY into YRange
+Put XRange over Columns into XIncr
+Put YRange over Rows into YIncr
+RowIndex is nothing
+Put MaxY into Y
+While RowIndex is less than Rows
+Build RowIndex up
+ColIndex is nothing
+Put MinX into X
+Put "" into Line
+While ColIndex is less than Columns
+Build ColIndex up
+Put Escape taking X, Y into Iters
+Put X plus XIncr into X
+Put "*" into Cell
+if Iters is less than 100
+Put "." into Cell
+
+Put Line plus Cell into Line
+
+Shout Line
+Put Y minus YIncr into Y
